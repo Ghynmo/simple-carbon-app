@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Buka Aplikasi Hejoijo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f8f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            flex-direction: column;
+            text-align: center;
+        }
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+        }
+        h1 {
+            color: #2e7d32;
+            margin-top: 0;
+        }
+        p {
+            color: #555;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+        .button {
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 10px;
+        }
+        .button:hover {
+            background-color: #388e3c;
+        }
+        .note {
+            font-size: 14px;
+            color: #777;
+            margin-top: 30px;
+        }
+        .logo {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🌱</div>
+        <h1>Aplikasi Hejoijo</h1>
+        <p>Selamat datang di Aplikasi Hejoijo! Aplikasi ini membantu Anda menghitung penyerapan CO2 dan VOC dari tanaman yang Anda miliki.</p>
+        <p>Klik tombol di bawah untuk menjalankan aplikasi:</p>
+        <a href="#" class="button" onclick="runApplication(); return false;">Jalankan Aplikasi</a>
+        <p class="note">Catatan: Saat aplikasi berjalan, jendela command prompt akan terbuka. Jangan tutup jendela tersebut sampai Anda selesai menggunakan aplikasi.</p>
+    </div>
+
+    <script>
+        function runApplication() {
+            // Jalankan file batch
+            try {
+                var shell = new ActiveXObject("WScript.Shell");
+                shell.Run("run-app.bat", 1, false);
+            } catch (e) {
+                alert("Tidak dapat menjalankan aplikasi secara otomatis. Silakan klik dua kali pada file 'run-app.bat' secara manual.");
+            }
+        }
+    </script>
+</body>
+</html>
