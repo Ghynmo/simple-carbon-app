@@ -25,9 +25,72 @@ const App = () => {
   const [plantCareTips, setPlantCareTips] = useState('');
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [isGeneratingTips, setIsGeneratingTips] = useState(false);
+  
+  // State untuk tanaman kustom
+  const [customPlants, setCustomPlants] = useState([]);
+  const [showAddCustomPlant, setShowAddCustomPlant] = useState(false);
+  const [newPlantName, setNewPlantName] = useState('');
+  const [newPlantCarbonRate, setNewPlantCarbonRate] = useState('');
+  const [newPlantVocRate, setNewPlantVocRate] = useState('');
 
   // Referensi untuk elemen laporan yang akan dikonversi ke PDF
   const reportRef = useRef(null);
+  
+  // Menggabungkan tanaman preset dengan tanaman kustom
+  const getAllPlants = () => {
+    return [...plantData, ...customPlants];
+  };
+
+  // Fungsi untuk menambahkan tanaman kustom
+  const handleAddCustomPlant = () => {
+    if (!newPlantName.trim() || !newPlantCarbonRate || !newPlantVocRate) {
+      setMessage('Harap isi semua field untuk tanaman kustom.');
+      return;
+    }
+
+    const carbonRate = parseFloat(newPlantCarbonRate);
+    const vocRate = parseFloat(newPlantVocRate);
+
+    if (carbonRate < 0 || vocRate < 0) {
+      setMessage('Nilai penyerapan tidak boleh negatif.');
+      return;
+    }
+
+    // Cek apakah nama tanaman sudah ada
+    const allPlants = getAllPlants();
+    if (allPlants.some(plant => plant.name.toLowerCase() === newPlantName.trim().toLowerCase())) {
+      setMessage('Nama tanaman sudah ada. Gunakan nama yang berbeda.');
+      return;
+    }
+
+    const newCustomPlant = {
+      name: newPlantName.trim(),
+      carbonRate: carbonRate,
+      vocRate: vocRate
+    };
+
+    setCustomPlants([...customPlants, newCustomPlant]);
+    setNewPlantName('');
+    setNewPlantCarbonRate('');
+    setNewPlantVocRate('');
+    setShowAddCustomPlant(false);
+    setMessage('Tanaman kustom berhasil ditambahkan!');
+    
+    // Hapus pesan sukses setelah 3 detik
+    setTimeout(() => {
+      if (message === 'Tanaman kustom berhasil ditambahkan!') {
+        setMessage('');
+      }
+    }, 3000);
+  };
+
+  // Fungsi untuk menghapus tanaman kustom
+  const handleRemoveCustomPlant = (plantName) => {
+    setCustomPlants(customPlants.filter(plant => plant.name !== plantName));
+    // Hapus tanaman kustom dari daftar plants yang sedang dipilih
+    setPlants(plants.filter(plant => plant.type !== plantName));
+    resetOutputs();
+  };
   
   // Referensi untuk elemen laporan yang akan dikonversi ke PDF
 
@@ -186,9 +249,10 @@ const App = () => {
     let totalCarbon = 0;
     let totalVocs = 0;
     let hasInvalidInput = false;
+    const allPlants = getAllPlants();
 
     plants.forEach(plant => {
-      const selectedPlant = plantData.find(data => data.name === plant.type);
+      const selectedPlant = allPlants.find(data => data.name === plant.type);
       if (selectedPlant && plant.quantity > 0 && plant.type !== 'Pilih Tanaman') {
         totalCarbon += selectedPlant.carbonRate * plant.quantity;
         totalVocs += selectedPlant.vocRate * plant.quantity;
@@ -223,7 +287,43 @@ const App = () => {
     setMessage('');
 
     try {
-      const prompt = `Berdasarkan penyerapan karbon dioksida sebesar ${carbonAbsorbed.toLocaleString()} gram per tahun dan penyerapan VOCs sebesar ${vocsAbsorbed.toLocaleString()} unit per tahun, berikan ringkasan singkat (maksimal 100 kata) tentang dampak positif lingkungan dari tanaman ini. Fokus pada manfaat kualitas udara dan kontribusi terhadap lingkungan yang lebih hijau.`;
+      const plantList = plants
+        .filter(plant => plant.type !== 'Pilih Tanaman' && plant.quantity > 0)
+        .map(plant => `${plant.quantity} ${plant.type}`)
+        .join(', ');
+
+      // Konversi data untuk perbandingan yang mudah dipahami
+      const carbonKg = carbonAbsorbed / 1000; // gram ke kg
+      const carbonTons = carbonKg / 1000; // kg ke ton
+
+      // Statistik perbandingan menarik
+      const carEmissionPerKm = 120; // gram CO2 per km (rata-rata mobil)
+      const carKmEquivalent = Math.round(carbonAbsorbed / carEmissionPerKm);
+      const treesEquivalent = Math.round(carbonAbsorbed / 22000); // 1 pohon dewasa ~22kg CO2/tahun
+      const householdDailyEmission = 16000; // gram CO2 per hari rata-rata rumah tangga
+      const householdDaysEquivalent = Math.round(carbonAbsorbed / householdDailyEmission);
+
+      const prompt = `Berdasarkan data berikut:
+- Tanaman yang ditanam: ${plantList}
+- Total CO2 yang diserap: ${carbonAbsorbed.toLocaleString()} gram per tahun (${carbonKg.toFixed(1)} kg atau ${carbonTons.toFixed(3)} ton)
+- Total VOCs yang diserap: ${vocsAbsorbed.toLocaleString()} unit per tahun
+
+STATISTIK PERBANDINGAN MENARIK:
+- Setara dengan mengurangi emisi ${carKmEquivalent.toLocaleString()} km perjalanan mobil
+- Setara dengan ${treesEquivalent} pohon dewasa dalam menyerap CO2
+- Setara dengan menetralisir emisi rumah tangga selama ${householdDaysEquivalent} hari
+- Dalam kilogram: ${carbonKg.toFixed(1)} kg CO2 diserap per tahun
+- Dalam ton: ${carbonTons.toFixed(3)} ton CO2 diserap per tahun
+
+Buatkan ringkasan dampak lingkungan yang positif dan inspiratif dalam bahasa Indonesia.
+
+WAJIB SERTAKAN:
+1. Statistik perbandingan di atas dalam format yang menarik dan mudah dipahami
+2. Penjelasan manfaat konkret terhadap lingkungan dan kualitas udara
+3. Dampak positif terhadap kehidupan sehari-hari
+4. Motivasi untuk terus berkontribusi pada lingkungan
+
+Gunakan bahasa yang mudah dipahami, menarik, dan inspiratif. Sertakan emoji yang relevan untuk membuat lebih menarik.`;
       let chatHistory = [];
       chatHistory.push({ role: "user", parts: [{ text: prompt }] });
       const payload = { contents: chatHistory };
@@ -319,7 +419,7 @@ const App = () => {
                 value={plant.type}
                 onChange={(e) => handlePlantTypeChange(index, e.target.value)}
               >
-                {plantData.map((data) => (
+                {getAllPlants().map((data) => (
                   <option key={data.name} value={data.name}>
                     {data.name}
                   </option>
@@ -355,6 +455,97 @@ const App = () => {
           Tambah Tanaman
         </button>
 
+        {/* Bagian Tanaman Kustom */}
+        <div className="mb-4">
+          <button
+            onClick={() => setShowAddCustomPlant(!showAddCustomPlant)}
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-300 ease-in-out shadow-md flex items-center justify-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            {showAddCustomPlant ? 'Tutup Form Tanaman Kustom' : 'Tambah Tanaman Kustom'}
+          </button>
+
+          {showAddCustomPlant && (
+            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h3 className="text-lg font-semibold text-blue-800 mb-3">Tambah Tanaman Kustom</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nama Tanaman</label>
+                  <input
+                    type="text"
+                    value={newPlantName}
+                    onChange={(e) => setNewPlantName(e.target.value)}
+                    placeholder="Contoh: Tanaman Hias Favorit"
+                    className="w-full p-2 border border-blue-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Penyerapan CO2 (gram/tahun/tanaman)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={newPlantCarbonRate}
+                      onChange={(e) => setNewPlantCarbonRate(e.target.value)}
+                      placeholder="500"
+                      className="w-full p-2 border border-blue-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Penyerapan VOCs (unit/tahun/tanaman)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={newPlantVocRate}
+                      onChange={(e) => setNewPlantVocRate(e.target.value)}
+                      placeholder="1000"
+                      className="w-full p-2 border border-blue-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={handleAddCustomPlant}
+                  className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 ease-in-out"
+                >
+                  Simpan Tanaman Kustom
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Daftar Tanaman Kustom */}
+          {customPlants.length > 0 && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-800 mb-3">Tanaman Kustom Tersimpan</h3>
+              <div className="space-y-2">
+                {customPlants.map((plant, index) => (
+                  <div key={index} className="flex justify-between items-center p-3 bg-white rounded-md border border-gray-200">
+                    <div>
+                      <span className="font-medium text-gray-800">{plant.name}</span>
+                      <div className="text-sm text-gray-600">
+                        CO2: {plant.carbonRate} g/tahun • VOCs: {plant.vocRate} unit/tahun
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveCustomPlant(plant.name)}
+                      className="p-1 bg-red-500 text-white rounded hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition duration-200 ease-in-out"
+                      aria-label="Hapus tanaman kustom"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 11-2 0v6a1 1 0 112 0V8z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         <button
           onClick={calculateAbsorption}
           className="w-full bg-emerald-500 text-white py-3 px-4 rounded-xl hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 transition duration-300 ease-in-out shadow-lg flex items-center justify-center gap-2"
@@ -379,30 +570,163 @@ const App = () => {
             <h2 className="text-2xl font-bold text-green-700 mb-4 text-center">
               Laporan Penyerapan
             </h2>
+            
+            {/* Daftar Tanaman yang Dihitung */}
+            <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-green-100">
+              <h3 className="text-lg font-semibold text-green-800 mb-3">Daftar Tanaman yang Dihitung:</h3>
+              <div className="space-y-2">
+                {plants
+                  .filter(plant => plant.type !== 'Pilih Tanaman' && plant.quantity > 0)
+                  .map((plant, index) => {
+                    const allPlants = getAllPlants();
+                    const plantInfo = allPlants.find(data => data.name === plant.type);
+                    const isCustomPlant = customPlants.some(cp => cp.name === plant.type);
+                    return (
+                      <div key={index} className="flex justify-between items-center p-3 bg-green-50 rounded-md border border-green-100">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-800">{plant.type}</span>
+                            {isCustomPlant && (
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Kustom</span>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            CO2: {plantInfo?.carbonRate || 0} g/tahun/tanaman • VOCs: {plantInfo?.vocRate || 0} unit/tahun/tanaman
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-lg font-semibold text-green-700">{plant.quantity} tanaman</span>
+                          <div className="text-sm text-gray-600">
+                            Total: {((plantInfo?.carbonRate || 0) * plant.quantity).toLocaleString()} g CO2/tahun
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                }
+              </div>
+            </div>
+
+            {/* Total Penyerapan */}
             <div className="space-y-3">
               <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-green-100">
-                <span className="text-lg font-medium text-gray-700">Karbon Dioksida (CO2) Diserap:</span>
+                <span className="text-lg font-medium text-gray-700">Total Karbon Dioksida (CO2) Diserap:</span>
                 <span className="text-xl font-semibold text-green-800">{carbonAbsorbed.toLocaleString()} gram/tahun</span>
               </div>
               <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-green-100">
-                <span className="text-lg font-medium text-gray-700">VOCs Diserap:</span>
+                <span className="text-lg font-medium text-gray-700">Total VOCs Diserap:</span>
                 <span className="text-xl font-semibold text-green-800">{vocsAbsorbed.toLocaleString()} unit/tahun</span>
               </div>
             </div>
-            <p className="text-sm text-gray-500 mt-4 text-center">
-              *Angka-angka ini adalah perkiraan berdasarkan data ilustratif.
-            </p>
 
-            <div className="mt-6 flex flex-col sm:flex-row gap-4">
+            {/* Statistik Perbandingan Menarik */}
+            <div className="mt-6 bg-white p-4 rounded-lg shadow-sm border border-green-100">
+              <h3 className="text-lg font-semibold text-green-800 mb-3">📊 Dampak Lingkungan dalam Perspektif:</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-2xl">🚗</span>
+                    <span className="font-medium text-blue-800">Setara Mengurangi Emisi Kendaraan</span>
+                  </div>
+                  <div className="text-sm text-blue-600">
+                    {Math.round(carbonAbsorbed / 120).toLocaleString()} km perjalanan mobil
+                  </div>
+                </div>
+                
+                <div className="bg-green-50 p-3 rounded-md border border-green-100">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-2xl">🌳</span>
+                    <span className="font-medium text-green-800">Setara dengan Pohon Dewasa</span>
+                  </div>
+                  <div className="text-sm text-green-600">
+                    {Math.round(carbonAbsorbed / 22000)} pohon dewasa per tahun
+                  </div>
+                </div>
+                
+                <div className="bg-orange-50 p-3 rounded-md border border-orange-100">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-2xl">🏠</span>
+                    <span className="font-medium text-orange-800">Menetralisir Emisi Rumah Tangga</span>
+                  </div>
+                  <div className="text-sm text-orange-600">
+                    Selama {Math.round(carbonAbsorbed / 16000)} hari
+                  </div>
+                </div>
+                
+                <div className="bg-purple-50 p-3 rounded-md border border-purple-100">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-2xl">⚖️</span>
+                    <span className="font-medium text-purple-800">Berat CO2 yang Diserap</span>
+                  </div>
+                  <div className="text-sm text-purple-600">
+                    {(carbonAbsorbed / 1000).toFixed(1)} kg ({(carbonAbsorbed / 1000000).toFixed(3)} ton)
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Cap Resmi Hejoijo */}
+            <div className="mt-6 flex justify-center">
+              <div className="relative">
+                {/* Cap Resmi SVG */}
+                <svg width="120" height="120" viewBox="0 0 120 120" className="text-green-600">
+                  {/* Lingkaran luar */}
+                  <circle cx="60" cy="60" r="58" fill="none" stroke="currentColor" strokeWidth="3"/>
+                  <circle cx="60" cy="60" r="50" fill="none" stroke="currentColor" strokeWidth="1"/>
+                  
+                  {/* Daun/Tanaman di tengah */}
+                  <g transform="translate(60,60)">
+                    <path d="M-15,-20 Q-20,-30 -10,-35 Q0,-40 10,-35 Q20,-30 15,-20 Q10,-10 0,-15 Q-10,-10 -15,-20 Z" 
+                          fill="currentColor" opacity="0.8"/>
+                    <path d="M-10,5 Q-15,-5 -5,-10 Q5,-15 15,-10 Q25,-5 20,5 Q15,15 5,10 Q-5,15 -10,5 Z" 
+                          fill="currentColor" opacity="0.6"/>
+                    <path d="M0,-15 L0,20" stroke="currentColor" strokeWidth="2"/>
+                  </g>
+                  
+                  {/* Teks HEJOIJO */}
+                  <path id="circle-text" d="M 60,60 m -45,0 a 45,45 0 1,1 90,0 a 45,45 0 1,1 -90,0" 
+                        fill="none" stroke="none"/>
+                  <text className="text-xs font-bold fill-current">
+                    <textPath href="#circle-text" startOffset="25%">
+                      HEJOIJO • RESMI • HEJOIJO • RESMI •
+                    </textPath>
+                  </text>
+                  
+                  {/* Tahun di bawah */}
+                  <text x="60" y="95" textAnchor="middle" className="text-xs font-semibold fill-current">
+                    2024
+                  </text>
+                </svg>
+                
+                {/* Teks "VERIFIED" di tengah */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-xs font-bold text-green-700">VERIFIED</div>
+                    <div className="text-xs text-green-600">LAPORAN</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* Tombol-tombol di luar laporan */}
+        {showReport && (
+          <div className="mt-6 space-y-4">
+            <div className="flex justify-center">
               <button
                 onClick={generatePDF}
-                className="flex-1 bg-green-500 text-white py-3 px-4 rounded-xl hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 transition duration-300 ease-in-out shadow-lg flex items-center justify-center gap-2"
+                className="bg-green-500 text-white py-3 px-6 rounded-xl hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 transition duration-300 ease-in-out shadow-lg flex items-center justify-center gap-2"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V8z" clipRule="evenodd" />
                 </svg>
                 Unduh Laporan PDF
               </button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4">
               <button
                 onClick={generateEnvironmentalSummary}
                 className="flex-1 bg-blue-500 text-white py-3 px-4 rounded-xl hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 transition duration-300 ease-in-out shadow-lg flex items-center justify-center gap-2"
